@@ -1,29 +1,29 @@
-#include <stdio.h> // printf
-#include <stdlib.h> // exit
-#include <unistd.h> // close
-
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <signal.h>
-#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <strings.h>
+#include <netdb.h>
+
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 
 #define BUFF_SIZE 32
 
 #define handle_error(msg) \
     do { perror(msg); exit(1); } while (0)
 
-void reaper(int sig)
-{
-    int status;
-    while (wait3(&status, WNOHANG, (struct rusage *)0) >= 0);
-}
 
+int handler(int);
 
 int main(int argc, char const *argv[])
 {
+    pthread_t th;
+    pthread_attr_t ta;
+
     int sock_clnt;
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -43,29 +43,32 @@ int main(int argc, char const *argv[])
 
     if (listen(sock, 5) == -1) handle_error("listen");
 
-    signal(SIGCHLD, reaper);
+    // *
+    pthread_attr_init(&ta);
+    pthread_attr_setdetachstate(&ta, PTHREAD_CREATE_DETACHED);
+
     for (;;) {
         if ((sock_clnt = accept(sock, NULL, 0)) < 0) {
             printf("err\n");
         }
-        if ((fork()) == 0) {
-            close(sock);
-            int bred;
-            char buff[BUFF_SIZE];
-
-            while ((bred = read(sock_clnt, buff, BUFF_SIZE)) > 0) {
-                write(STDIN_FILENO, buff, bred);
-                write(STDIN_FILENO, "\n", 1);
-            }
-
-            close(sock_clnt);
-            exit(0);
-        } else {
-            close(sock_clnt);
+        if ((pthread_create(&th, &ta, (void*) handler, (void*)(intptr_t) sock_clnt)) < 0) {
+            printf("pthread_create err\n");
         }
     }
 
-    close(sock);
-
     return 0;
+}
+
+int handler(int par)
+{    
+    int bred;
+    char buff[BUFF_SIZE];
+    int sock_clnt = (intptr_t) par;
+
+    while ((bred = read(sock_clnt, buff, BUFF_SIZE)) > 0) {
+        write(STDIN_FILENO, buff, bred);
+        write(STDIN_FILENO, "\n", 1);
+    }
+
+    close(sock_clnt);
 }
