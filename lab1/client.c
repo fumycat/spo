@@ -15,27 +15,28 @@
 
 int main(int argc, char const *argv[])
 {
-	for (int x = 0; x < 5; x++) {
+    struct hostent *hp, *gethostbyname();
 
-		struct hostent *hp, *gethostbyname();
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    if (s == -1) handle_error("socket");
 
-	    int s = socket(AF_INET, SOCK_STREAM, 0);
-	    if (s == -1) handle_error("socket");
+    struct sockaddr_in ss;
+    bzero((char*)&ss, sizeof(ss));
+    ss.sin_family = AF_INET;
+    hp = gethostbyname(argv[1]);
+    bcopy(hp -> h_addr, &ss.sin_addr, hp -> h_length);
+    ss.sin_port = htons(atoi(argv[2]));
+    int len = sizeof(ss);
 
-	    struct sockaddr_in ss;
-	    bzero((char*)&ss, sizeof(ss));
-	    ss.sin_family = AF_INET;
-	    hp = gethostbyname(argv[1]);
-	    bcopy(hp -> h_addr, &ss.sin_addr, hp -> h_length);
-	    ss.sin_port = htons(atoi(argv[2]));
-	    int len = sizeof(ss);
+    if (connect(s, (struct sockaddr *)&ss, sizeof(struct sockaddr_in)) == -1) handle_error("connect");
 
-		if (connect(s, (struct sockaddr *)&ss, sizeof(struct sockaddr_in)) == -1) handle_error("connect");
-
-	    write(s, argv[3], 1);
-
-		close(s);
-		sleep(atoi(argv[3]));
+    for (int x = 0; x < 5; x++) {
+        write(s, argv[3], 1);
+        sleep(atoi(argv[3]));
     }
+
+    close(s);
+    
+
     return 0;
 }

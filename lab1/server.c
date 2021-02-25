@@ -2,6 +2,9 @@
 #include <stdlib.h> // exit
 #include <unistd.h> // close
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -11,6 +14,12 @@
 
 #define handle_error(msg) \
     do { perror(msg); exit(1); } while (0)
+
+void reaper(int sig)
+{
+	int status;
+	while (wait3(&status, WNOHANG, (struct rusage *)0) >= 0);
+}
 
 
 int main(int argc, char const *argv[])
@@ -34,18 +43,26 @@ int main(int argc, char const *argv[])
 
     if (listen(sock, 5) == -1) handle_error("listen");
 
+    signal(SIGCHLD, reaper);
     for (;;) {
         if ((sock_clnt = accept(sock, NULL, 0)) < 0) {
             printf("err\n");
         }
-        int bred;
-        char buff[BUFF_SIZE];
+        if ((fork()) == 0) {
+        	close(sock);
+        	int bred;
+	        char buff[BUFF_SIZE];
 
-        while ((bred = read(sock_clnt, buff, BUFF_SIZE)) > 0) {
-            write(STDIN_FILENO, buff, bred);
+	        while ((bred = read(sock_clnt, buff, BUFF_SIZE)) > 0) {
+	            write(STDIN_FILENO, buff, bred);
+	            write(STDIN_FILENO, "\n", 1);
+	        }
+
+        	close(sock_clnt);
+        	exit(0);
+        } else {
+        	close(sock_clnt);
         }
-        write(STDIN_FILENO, "\n", 1);
-        close(sock_clnt);
     }
 
     close(sock);
