@@ -9,15 +9,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 
 #define BUFF_SIZE 32
+#define PORT 16000
 
 #define handle_error(msg) \
     do { perror(msg); exit(1); } while (0)
 
 
 int handler(int);
+
+int init_socket(int *sock, struct sockaddr_in *addr, socklen_t *size)
+{
+    if ((*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
+    {
+        return -1;
+    }
+
+    while (bind(*sock, (struct sockaddr *)addr, *size) == -1)
+    {
+        switch (errno)
+        {
+        case EADDRINUSE:
+        case EACCES:
+            addr->sin_port = htons(htons(addr->sin_port) + 1);
+            break;
+        default:
+            return -1;
+        }
+    }
+
+    printf("Server port: %d\n", ntohs(addr->sin_port));
+
+    return 0;
+}
 
 int main(int argc, char const *argv[])
 {
@@ -31,15 +58,15 @@ int main(int argc, char const *argv[])
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(int));
         
     struct sockaddr_in ss;
+    socklen_t addr_len = sizeof(struct sockaddr_in);
     ss.sin_family = AF_INET;
-    ss.sin_addr.s_addr = inet_addr("127.0.0.1"); // htons(INADDR_ANY);
+    ss.sin_addr.s_addr = INADDR_ANY; // htons(INADDR_ANY);
+    ss.sin_port = htons(PORT);
 
-    if (bind(sock, (struct sockaddr *)&ss, sizeof(struct sockaddr_in)) == -1) handle_error("bind");
+    if (init_socket(&sock, (struct sockaddr *)&ss, &addr_len)) handle_error("bind");
 
     int len = sizeof(ss);
     getsockname(sock, (struct sockaddr *)&ss, &len);
-
-    printf("port is %d\n", ntohs(ss.sin_port));
 
     if (listen(sock, 5) == -1) handle_error("listen");
 
